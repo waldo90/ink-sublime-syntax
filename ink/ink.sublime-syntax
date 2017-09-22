@@ -1,0 +1,234 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/3/syntax.html
+name: Ink
+file_extensions:
+  - ink
+scope: source.ink
+
+variables:
+  # Note that blackslashes don't need to be escaped within single quoted
+  # strings in YAML. When using single quoted strings, only single quotes
+  # need to be escaped: this is done by using two single quotes next to each
+  # other.
+  story: '[A-Za-z_0-9.,!?'']*'
+  keywords: '\b(VAR|LIST|CONST|DONE|END)\b'
+  ident: '[a-z_A-Z0-9]*'
+  diverts: '->|<-'
+  operators_assignment: '\+\=|-\=|\*\=|/\=|%\=  '
+
+contexts:
+  # The prototype context is prepended to all contexts but those setting
+  # meta_include_prototype: false.
+  prototype:
+    - include: comments
+
+  main:
+    # The main context is the initial starting point of our syntax.
+    # Include other contexts from here (or specify them directly).
+    - include: keywords
+#    - include: numbers
+#    - include: strings
+    - include: glue
+    - include: tags
+    - include: knots
+    - include: assignment
+    - include: braces
+    - include: brace_matching
+    - include: labels
+    - include: diverts
+    - include: choices
+
+  glue:
+    - match: <>
+      scope: keyword.control.ink
+
+  keywords:
+    - match: '{{keywords}}'
+      scope: keyword.control.ink
+      push:
+        - include: strings
+        - match: '{{ident}}'
+          scope: variable.language.ink
+        - match: $
+          pop: true
+
+  operators:
+    - match: '{{operators_assignment}}'
+      scope: keyword.operator.assignment.ink
+    - match: \+|\-|/|%|\||\^|~|!|\&|\?
+      scope: keyword.operator.arithmetic.ink
+    - match: <\=|>\=|\=\=|<|>|\!\=
+      scope: keyword.operator.comparison.ink
+
+  numbers:
+    - match: '\b(-)?[0-9.]+\b'
+      scope: constant.numeric.example-c
+
+  strings:
+    # Strings begin and end with quotes, and use backslashes as an escape
+    # character.
+    - match: '"'
+      scope: punctuation.definition.string.begin.ink
+      push: inside_string
+
+  inside_string:
+    - meta_include_prototype: false
+    - meta_scope: string.quoted.double.ink
+    - match: '\.'
+      scope: constant.character.escape.ink
+    - match: '"'
+      scope: punctuation.definition.string.end.ink
+      pop: true
+
+  comments:
+    # Comments begin with a '//' and finish at the end of the line.
+    - match: '//'
+      scope: punctuation.definition.comment.ink
+      push:
+        # This is an anonymous context push for brevity.
+        - meta_scope: comment.line.double-slash.ink
+        - match: $\n?
+          pop: true
+    - match: '/\*'
+      scope: punctuation.definition.comment.begin.ink
+      push:
+        - meta_scope: comment.block.documentation.ink
+        - match: \*/
+          pop: true
+
+  tags:
+    - include: tags_std
+    - include: tags_params
+
+  tags_std:
+    - match: '#[^:]+$'
+      scope: comment.link.ink
+
+  tags_params:
+    # This context is not defined in the language.
+    # It handles tags of the form: #TAG:param_a:param_b:{.....}:param_z
+    - match: '#\w*'
+      scope: variable.parameter.ink
+      push:
+        - match: ':'
+          scope: variable.annotation.ink
+        - match: $
+          pop: true
+        - match: \w
+          scope: variable.parameter.ink
+
+  knots:
+    - match: ^={2,}
+      scope: variable.annotation.ink
+      push:
+        - match: function
+          scope: keyword.control.ink
+        - match: '{{ident}}'
+          scope: variable.annotation.ink
+        - include: parentheses
+        - match: ={2,}
+          scope: variable.annotation.ink
+        - match: $
+          pop: true
+
+  assignment:
+    - match: (~)
+      scope: keyword.control.ink
+      push:
+        - match: '{{ident}}'
+          scope: variable.parameter.ink
+        - match: '{{operators_assignment}}'
+          scope: keyword.control.ink
+        - match: $
+          pop: true
+
+  diverts:
+    - match: '{{diverts}}'
+      scope: variable.annotation.ink
+      push:
+        - match: '{{diverts}}'
+          scope: variable.annotation.ink
+        - match: $
+          pop: true
+        - match: '{{ident}}'
+          scope: variable.annotation.ink
+
+  braces:
+    - match: \{
+      scope: variable.annotation.ink
+      push: inside_brace
+    - match: '-\s*else'
+      scope: variable.annotation.ink
+      push: inside_brace
+    - match: \}
+      scope: variable.annotation.ink
+      pop: true
+
+  inside_brace:
+      - match: '{{ident}}'
+        scope: variable.parameter.ink
+      - match: '\:'
+        scope: variable.annotation.ink
+        pop: true
+      - include: operators
+      - include: tags
+      - include: braces
+      - include: parentheses
+
+  brace_matching:
+    # highlights matching braces
+    - match: \{
+      scope: punctuation.section.group.begin.ink
+      push:
+        - meta_scope: meta.group.ink
+        - match: \}
+          scope: punctuation.section.group.end.ink
+          pop: true
+
+  brackets:
+    - match: \[
+      scope: variable.annotation.ink
+      push:
+        - match: '{{story}}'
+          scope: entity.other.attribute-name.ink
+        - match: \]
+          scope: variable.annotation.ink
+          pop: true
+        - include: operators
+        - include: braces
+
+  parentheses:
+    - match: \(
+      scope: variable.annotation.ink
+      push:
+        - match: '{{ident}}'
+          scope: variable.parameter.ink
+        - match: \)
+          scope: variable.annotation.ink
+          pop: true
+
+  labels:
+    - match: '^[\s-]*\(({{ident}})\)'
+      scope: entity.name.function.ink
+      captures:
+        1: variable.annotation.ink
+
+  choices:
+    #- match: '[\s*+-]'
+    # \w+(\.\w+)+
+    - match: '^\s*[*+-]([^>])'
+      scope: entity.name.function.ink
+      push:
+        - include: choice_level
+        - include: braces
+        - include: brackets
+        - include: diverts
+        - match: '{{story}}'
+          scope: entity.other.attribute-name.ink
+        - match: $
+          pop: true
+
+  choice_level:
+    - match: '\s*[*+-][^>]'
+      scope: entity.name.function.ink
